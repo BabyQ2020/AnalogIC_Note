@@ -1,12 +1,25 @@
 # Slew Rate 圧摆率
 
-两级运放的圧摆率
+两级运放的圧摆率 
 
+<!-- 生成目录 -->
+[TOC]
 
-<!-- 显示图片 -->
-<p align = "center">  <img src="./Img/SR1_20240908.png"width="80%" /> </p>
+## SR+
+### case1
+<p align = "center">  
+<img src="Imgs/SR_圧摆率-image.png" width="100%" />
+</p> 
+<br>  
 
+### case2
+<p align = "center">  
+<img src="Imgs/SR_圧摆率-image-1.png" width="100%" />
+</p>  
+<br>
 
+## SR-  
+<p align = "center">  
+<img src="Imgs/SR_圧摆率-image-2.png" width="100%" />
+</p>
 
-<!-- 显示图片 -->
-<p align = "center">  <img src="./Img/SR2_20240908.png"width="80%" /> </p>
