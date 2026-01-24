@@ -12,7 +12,7 @@ def bode_single(ax_mag, ax_ph, Hs, label=None, color='C0', ls='-', lw=1.0, omega
     freq = omega / (2 * np.pi)
     mag_db = 20 * np.log10(mag)
     phase_deg = np.degrees(phase)
-    phase_deg = (phase_deg + 180)           # 相位包裹到 [-180°, +180°]
+    phase_deg = (phase_deg+360)%180-180           # 相位包裹到 [-180°, +180°]
     
     ax_mag.semilogx(freq, mag_db, label=label, color=color, ls=ls, lw=lw)
     ax_ph.semilogx(freq, phase_deg, label=label, color=color, ls=ls, lw=lw)
@@ -64,7 +64,6 @@ def plot_bode(ax_mag, ax_ph, xlim=(1, 1e8), mag_ylim=None, phase_ylim=(-270, 90)
 
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.1)
-
 
 
 # ────────────────────────────────────────────────
@@ -143,6 +142,7 @@ for vin in vin_list:
                 color=plt.cm.tab10(len(vin_list) - vin_list.index(vin)),
                 omega=omega)
     
+    
 # ────────────────────────────────────────────────
 # 循环结束后统一设置图表样式
 # ────────────────────────────────────────────────
@@ -157,6 +157,7 @@ plot_bode(ax_mag, ax_ph,
           phase_ylim=(-200, 10),
           mag_yticks=[-20, 0, 20, 40, 60, 80, 100],
           phase_yticks=[-180, -135, -90, -45, 0, 45, 90])        # 相位 y轴范围
+
 
 plt.show()
 
