@@ -66,16 +66,10 @@ def plot_bode(ax_mag, ax_ph, xlim=(1, 1e8), mag_ylim=None, phase_ylim=(-270, 90)
     plt.subplots_adjust(hspace=0.1)
 
 
-
 # ────────────────────────────────────────────────
-# 主逻辑：扫描输入电压 VIN
+# 主逻辑：功率级参数，内部必要的设计参数，反馈电阻参数
 # ────────────────────────────────────────────────
 vin_list = [10]           # input voltages to sweep (V)
-
-
-# ────────────────────────────────────────────────
-# 固定参数：功率级参数，内部必要的设计参数，反馈电阻参数
-# ────────────────────────────────────────────────
 VO   = 5                      # output voltage (V)
 IO   = 2                      # output current (A)
 
@@ -85,15 +79,12 @@ R_ESR   = 50e-3               # capacitor ESR (Ω)
 R_O  = VO / IO                # load resistance (Ω)
 
 VREF = 2.5                    # Voltage Reference Voltage (V)
-# R_FBB   = 100e3               # feedback resistor bottom (Ω)
-# R_FBT   = 100e3               # feedback resistor top (Ω)
-# R_FBT   = (VO/VREF - 1)*R_FBB # feedback resistor top (Ω)
 
 fsw     = 500e3              # switching frequency (Hz)
 fcross  = 0.1*fsw               # target crossover frequency (Hz)
 
-PM=60
-VM=1
+PM=60   # expected phase margin(deg)
+
 
 # ────────────────────────────────────────────────
 # 绘图相关参数：创建绘图句柄，绘图范围
@@ -106,21 +97,21 @@ omega = np.logspace(0, 8, 2000)   # frequency vector for Bode plot (rad/s)
 # ────────────────────────────────────────────────
 for vin in vin_list:
     VIN = vin                 # input voltage (V) - 当前扫描值
+    VM=0.1*VIN
     
     # 功率级零极点（依赖于 ESR 和负载）
-    wz_esr = 1 / (R_ESR * C_O)                      # output ESR zero
-    wp_lc = 1 / (L_bk*C_O)**0.5            # output filter pole
+    wz_out = 1 / (R_ESR * C_O)             # output ESR zero
+    wp_lc = 1 / (L_bk*C_O)**0.5            # output filter dual pole
     
     # 补偿器设计
     wc     = 2 * np.pi * fcross                     # crossover angular frequency
     wp0    = wc * VM/VIN                          # low-frequency pole of compensator
     wz_c  = wp_lc                                 # compensator zero (cancel output pole)
     wz_ff  = wp_lc                                 # compensator pole (cancel ESR zero)
-    wp_ff = wz_esr
-    wp_hf = 2*np.pi*fsw/2
+    wp_ff = wz_out
+    wp_hf = 2*np.pi*(fsw/2)
     # wp_hf = w/np.tan(np.pi*(90-PM))
 
-    
     s = tf('s')
 
     # 补偿级 传递函数
@@ -168,6 +159,26 @@ plot_bode(ax_mag, ax_ph,
           phase_yticks=[-180, -135, -90, -45, 0])   # 相位 y轴刻度
 
 
-
-
 plt.show()
+
+
+# 具体参数计算
+R_FBB   = 100e3               # feedback resistor bottom (Ω)
+# R_FBT   = 100e3               # feedback resistor top (Ω)
+R_FBT   = (VO/VREF - 1)*R_FBB # feedback resistor top (Ω)
+
+# 计算补偿级参数
+C_COMP  = 1/(R_FBT*wp0)
+R_COMP  = 1/(C_COMP*wz_c)
+C_FF    = 1/(R_FBT*wz_ff)
+R_FF    = 1/(C_FF*wp_ff)
+C_HF    = 1/(R_COMP*wp_hf)
+
+# 输出补偿级 参数
+print("\nCompensation Parameters (last VIN case):")
+print(f" R_FBB = {R_FBB*1e-3:.2f} kΩ")
+print(f" R_FBT = {R_FBT*1e-3:.1f} kΩ")
+print(f" R_FF = {R_FF*1e-3:.1f} kΩ")
+print(f" R_COMP = {R_COMP*1e-3:.2f} kΩ")
+print(f" C_COMP = {C_COMP*1e12:.1f} pF")
+print(f" C_HF   = {C_HF*1e12:.1f} pF")
