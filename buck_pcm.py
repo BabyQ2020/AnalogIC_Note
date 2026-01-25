@@ -67,37 +67,29 @@ def plot_bode(ax_mag, ax_ph, xlim=(1, 1e8), mag_ylim=None, phase_ylim=(-270, 90)
 
 
 # ────────────────────────────────────────────────
-# 主逻辑：扫描输入电压 VIN
+# 主逻辑：功率级参数，内部必要的设计参数，反馈电阻参数
 # ────────────────────────────────────────────────
-vin_list = [10, 15, 25, 35, 45]           # input voltages to sweep (V)
+vin_list = [10]     # input voltages to sweep (V)
+VO = 5                          # output voltage (V)
+IO = 2                          # output current (A)
 
+L_bk    = 10e-6                 # buck inductor (H)
+C_O     = 2.2e-6                # output capacitor (F)
+R_ESR   = 10e-3                 # capacitor ESR (Ω)
+R_O     = VO / IO               # load resistance (Ω)
 
-# ────────────────────────────────────────────────
-# 固定参数：功率级参数，内部必要的设计参数，反馈电阻参数
-# ────────────────────────────────────────────────
-VO   = 5                      # output voltage (V)
-IO   = 2                      # output current (A)
+VREF = 2.5                      # Voltage Reference Voltage (V)
 
-L_bk    = 10e-6               # buck inductor (H)
-C_O     = 2.2e-6              # output capacitor (F)
-R_ESR   = 10e-3               # capacitor ESR (Ω)
-R_O  = VO / IO                # load resistance (Ω)
-
-VREF = 2.5                    # Voltage Reference Voltage (V)
-R_FBB   = 100e3               # feedback resistor bottom (Ω)
-# R_FBT   = 100e3               # feedback resistor top (Ω)
-R_FBT   = (VO/VREF - 1)*R_FBB # feedback resistor top (Ω)
-
-fsw     = 1000e3              # switching frequency (Hz)
+fsw     = 1000e3                # switching frequency (Hz)
 fcross  = 0.1*fsw               # target crossover frequency (Hz)
 
-Gm_EA   = 50e-6               # error amplifier transconductance (S)
-Ri      = 0.2                 # current sense gain inverse (Ri = 1/gmps)
-Vse     = 0.25                # slope compensation peak voltage (V)
+Gm_EA   = 50e-6                 # error amplifier transconductance (S)
+Ri      = 0.2                   # current sense gain inverse (Ri = 1/gmps)
+Vse     = 0.25                  # slope compensation peak voltage (V)
 
 
 # ────────────────────────────────────────────────
-# 绘图相关参数：创建绘图句柄，绘图范围
+# 绘图相关参数：创建绘图句柄，绘图计算范围
 # ────────────────────────────────────────────────
 fig, (ax_mag, ax_ph) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 omega = np.logspace(0, 8, 2000)   # frequency vector for Bode plot (rad/s)
@@ -116,19 +108,21 @@ for vin in vin_list:
     wc     = 2 * np.pi * fcross                     # crossover angular frequency
     wp0    = wc * Ri / R_O                          # low-frequency pole of compensator
     wz_EA  = wp_out                                 # compensator zero (cancel output pole)
+    # wz_EA  = 0.1 * wc                                 # compensator zero (cancel output pole)
     wp_EA  = wz_out                                 # compensator pole (cancel ESR zero)
     
     s = tf('s')
+    # Type-II 补偿级传递函数
     Gvc = (-wp0 / s) * (1 + s / wz_EA) / (1 + s / wp_EA)   # Type-II compensator
     
     # 等效电流内环传递函数（包含斜坡补偿）
     Gci = (1 / Ri) * (1 / (1 + s * (Vse * fsw * L_bk + (0.5*VIN - VO)*Ri) / (VIN * Ri * fsw)))
     
     # 输出阻抗（功率级）
-    zo = (1 + s * R_ESR * C_O) * R_O / (1 + s * (R_ESR + R_O) * C_O)
+    Zo = (1 + s * R_ESR * C_O) * R_O / (1 + s * (R_ESR + R_O) * C_O)
     
     # 总开环增益
-    Hs = Gvc * Gci * zo
+    Hs = Gvc * Gci * Zo
     
     # 计算增益裕度与相位裕度
     gm, pm, wg, wp_freq = margin(Hs)
@@ -156,15 +150,19 @@ plot_bode(ax_mag, ax_ph,
           mag_ylim=(-40, 110),          # 幅度 y轴自动
           phase_ylim=(-200, 10),
           mag_yticks=[-20, 0, 20, 40, 60, 80, 100],
-          phase_yticks=[-180, -135, -90, -45, 0, 45, 90])        # 相位 y轴范围
+          phase_yticks=[-180, -135, -90, -45, 0])        # 相位 y轴范围
 
 
 plt.show()
 
 # ────────────────────────────────────────────────
-# 补偿网络元件计算（以最后一次循环的值为例）
+# 计算相应的器件取值（以最后一次循环的值为例）
 # ────────────────────────────────────────────────
-C_COMP = R_FBB / (R_FBT + R_FBB) * Gm_EA * (R_O / Ri) / wc
+R_FBB   = 100e3               # feedback resistor bottom (Ω)
+# R_FBT   = 100e3               # feedback resistor top (Ω)
+R_FBT   = (VO/VREF - 1)*R_FBB # feedback resistor top (Ω)
+
+C_COMP = VREF / VO * Gm_EA * (R_O / Ri) / wc
 R_COMP = 1 / (C_COMP * wz_EA)
 C_HF   = 1 / (R_COMP * wp_EA)
 
