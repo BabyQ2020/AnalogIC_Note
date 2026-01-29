@@ -3,27 +3,22 @@
 `include "constants.vams"
 `include "disciplines.vams"
 
-module AMP (VP, VN, VO, VDD, VSS);
+module amp (VP, VN, VO);
     output VO;
-    input VP, VN, VDD, VSS;
-    electrical VO, VP, VN, VDD, VSS;
+    input VP, VN;
+    electrical VO, VP, VN;
 
     parameter real vos = 1m;
     parameter real gain = 1000;
+    parameter real vo_max = 5;
+    parameter real vo_min = 0;
  
-    real vddss, vo_v;
+    real vo_v;
     analog begin
-        @(initial_step) begin
-            vddss = V(VDD, VSS);
-			vo_v = 0;
-        end
-
-		vddss = V(VDD, VSS);
 		vo_v = gain*(V(VP,VN)+vos);
+        vo_v = vo_v<vo_min ? vo_min : vo_v;
+        vo_v = vo_v>vo_max ? vo_max : vo_v;
 
-		if(vo_v<0) vo_v = 0;
-		if(vo_v>vddss) vo_v = vddss;
-
-        V(VO, VSS) <+ vo_v;
+        V(VO) <+ vo_v;
     end
 endmodule
