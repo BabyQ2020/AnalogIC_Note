@@ -10,7 +10,7 @@
 `include "constants.vams"
 `include "disciplines.vams"
 
-module and2 (Y, A, B, VDD, VSS);
+module AND2 (Y, A, B, VDD, VSS);
 	output Y;
 	input A, B, VDD, VSS;
 	electrical Y, A, B, VDD, VSS;
@@ -47,3 +47,4 @@ module and2 (Y, A, B, VDD, VSS);
 		V(Y, VSS) <+ vddss*transition(y, tdel, tr, tf);	
 	end
 endmodule
+
