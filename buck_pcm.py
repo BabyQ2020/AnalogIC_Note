@@ -17,13 +17,13 @@ def bode_single(ax_mag, ax_ph, Hs, label=None, color='C0', ls='-', lw=1.0, omega
     ax_mag.semilogx(freq, mag_db, label=label, color=color, ls=ls, lw=lw)
     ax_ph.semilogx(freq, phase_deg, label=label, color=color, ls=ls, lw=lw)
 
-def plot_x(ax_mag, ax_ph, fcross_target):
+def plot_x(ax_mag, ax_ph, freq, freq_str):
     """
     设置 x 轴 竖线穿越频率标记
     """
-    ax_mag.axvline(fcross_target, color='red', ls='--', lw=1.2,
-                   label=f"Target fcross = {fcross_target/1e3:.0f} kHz")
-    ax_ph.axvline(fcross_target, color='red', ls='--', lw=1.2)
+    ax_mag.axvline(freq, color='red', ls='--', lw=1.2,
+                   label= freq_str + f"= {freq/1e3:.1f} kHz")
+    ax_ph.axvline(freq, color='red', ls='--', lw=1.2)
 
 
 def plot_bode(ax_mag, ax_ph, xlim=(1, 1e8), mag_ylim=None, phase_ylim=(-270, 90), mag_yticks=None, phase_yticks=None):
@@ -69,24 +69,23 @@ def plot_bode(ax_mag, ax_ph, xlim=(1, 1e8), mag_ylim=None, phase_ylim=(-270, 90)
 # ────────────────────────────────────────────────
 # 主逻辑：功率级参数，内部必要的设计参数，反馈电阻参数
 # ────────────────────────────────────────────────
-vin_list = [10]     # input voltages to sweep (V)
+# VIN = 24          # input voltages to sweep (V)
+A_list = [24,18,12,10]     # input voltages to sweep (V)
 VO = 5                          # output voltage (V)
 IO = 2                          # output current (A)
 
-L_bk    = 10e-6                 # buck inductor (H)
-C_O     = 2.2e-6                # output capacitor (F)
+L_BK    = 6.8e-6                 # buck inductor (H)
 R_ESR   = 10e-3                 # capacitor ESR (Ω)
-R_O     = VO / IO               # load resistance (Ω)
+C_O     = 22e-6                # output capacitor (F)
 
-VREF = 2.5                      # Voltage Reference Voltage (V)
+
+VREF = 1.0                      # Voltage Reference Voltage (V)
+GM   = 100e-6                 # error amplifier transconductance (S)
+RI   = 1/5                   # current sense gain inverse (RI = 1/gmps)
+VSE  = 0.5                  # slope compensation peak voltage (V)
 
 fsw     = 1000e3                # switching frequency (Hz)
 fcross  = 0.1*fsw               # target crossover frequency (Hz)
-
-Gm_EA   = 50e-6                 # error amplifier transconductance (S)
-Ri      = 0.2                   # current sense gain inverse (Ri = 1/gmps)
-Vse     = 0.25                  # slope compensation peak voltage (V)
-
 
 # ────────────────────────────────────────────────
 # 绘图相关参数：创建绘图句柄，绘图计算范围
@@ -97,52 +96,64 @@ omega = np.logspace(0, 8, 2000)   # frequency vector for Bode plot (rad/s)
 # ────────────────────────────────────────────────
 # 主循环
 # ────────────────────────────────────────────────
-for vin in vin_list:
-    VIN = vin                 # input voltage (V) - 当前扫描值
+for i in A_list:
+    VIN = i                 # input voltage (V) - 当前扫描值
+
+    R_O = VO / IO               # load resistance (Ω)
     
     # 功率级零极点（依赖于 ESR 和负载）
     wz_out = 1 / (R_ESR * C_O)                      # output ESR zero
     wp_out = 1 / ((R_ESR + R_O) * C_O)              # output filter pole
     
     # 补偿器设计
-    wc     = 2 * np.pi * fcross                     # crossover angular frequency
-    wp0    = wc * Ri / R_O                          # low-frequency pole of compensator
     wz_EA  = wp_out                                 # compensator zero (cancel output pole)
-    # wz_EA  = 0.1 * wc                                 # compensator zero (cancel output pole)
     wp_EA  = wz_out                                 # compensator pole (cancel ESR zero)
     
+    R_COMP = (2*np.pi*VO*RI*C_O*fcross)/(VREF * GM)
+    C_COMP = 1/(R_COMP * wz_EA)
+    C_HF   = 1 / (R_COMP * wp_EA)
+
+
+    # s 域符号设置
     s = tf('s')
+
+    # feedback
+    Gdiv = VREF/VO
+
     # Type-II 补偿级传递函数
-    Gvc = (-wp0 / s) * (1 + s / wz_EA) / (1 + s / wp_EA)   # Type-II compensator
+    Gvc = GM*(1+s*R_COMP*C_COMP)/(C_COMP*s*(1+s*R_COMP*C_HF))  # Type-II compensator
     
     # 等效电流内环传递函数（包含斜坡补偿）
-    Gci = (1 / Ri) * (1 / (1 + s * (Vse * fsw * L_bk + (0.5*VIN - VO)*Ri) / (VIN * Ri * fsw)))
+    Gci = (1 / RI) * (1 / (1 + s * (VSE * fsw * L_BK + (0.5*VIN - VO)*RI) / (VIN * RI * fsw)))
     
     # 输出阻抗（功率级）
     Zo = (1 + s * R_ESR * C_O) * R_O / (1 + s * (R_ESR + R_O) * C_O)
     
     # 总开环增益
-    Hs = Gvc * Gci * Zo
+    Hs = Gdiv * Gvc * Gci * Zo
     
     # 计算增益裕度与相位裕度
     gm, pm, wg, wp_freq = margin(Hs)
     f_actual = wp_freq / (2 * np.pi) if wp_freq is not None else None
+
+    print(f"i = {i:2.2f} | GM: {gm:3.2f} dB  PM: {pm:3.1f}°  @ {f_actual:.2e} Hz")
+    print(f"R_COMP = {R_COMP*1e-3:.2f} kΩ | " + f"C_COMP = {C_COMP*1e12:.1f} pF | " + f"C_HF = {C_HF*1e12:.1f} pF")
     
-    print(f"VIN = {VIN:2d} V | GM: {gm:6.2f} dB  PM: {pm+180:5.1f}°  @ {f_actual:.2e} Hz")
     
     # 绘制当前 VIN 的曲线
     bode_single(ax_mag, ax_ph, Hs, 
-                label=f'VIN={VIN}V', 
-                color=plt.cm.tab10(len(vin_list) - vin_list.index(vin)),
+                label=f'i={i}', 
+                color=plt.cm.tab10(len(A_list) - A_list.index(i)),
                 omega=omega)
     
+
     
 # ────────────────────────────────────────────────
 # 循环结束后统一设置图表样式
 # ────────────────────────────────────────────────
 
 # 绘制 目标穿越频率所对应的竖线
-plot_x(ax_mag, ax_ph,fcross)
+plot_x(ax_mag, ax_ph,fcross,'fcross')
 
 # 设置图标样式
 plot_bode(ax_mag, ax_ph,          
@@ -152,23 +163,5 @@ plot_bode(ax_mag, ax_ph,
           mag_yticks=[-20, 0, 20, 40, 60, 80, 100],
           phase_yticks=[-180, -135, -90, -45, 0])        # 相位 y轴范围
 
-
 plt.show()
 
-# ────────────────────────────────────────────────
-# 计算相应的器件取值（以最后一次循环的值为例）
-# ────────────────────────────────────────────────
-R_FBB   = 100e3               # feedback resistor bottom (Ω)
-# R_FBT   = 100e3               # feedback resistor top (Ω)
-R_FBT   = (VO/VREF - 1)*R_FBB # feedback resistor top (Ω)
-
-C_COMP = VREF / VO * Gm_EA * (R_O / Ri) / wc
-R_COMP = 1 / (C_COMP * wz_EA)
-C_HF   = 1 / (R_COMP * wp_EA)
-
-print("\nCompensation Parameters (last VIN case):")
-print(f" R_FBB = {R_FBB*1e-3:.2f} kΩ")
-print(f" R_FBT = {R_FBT*1e-3:.1f} kΩ")
-print(f" R_COMP = {R_COMP*1e-3:.2f} kΩ")
-print(f" C_COMP = {C_COMP*1e12:.1f} pF")
-print(f" C_HF   = {C_HF*1e12:.1f} pF")
